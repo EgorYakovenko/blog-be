@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { stringify } from "querystring";
 
 const UserSchema = new mongoose.Schema(
   {

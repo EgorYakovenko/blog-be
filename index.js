@@ -1,11 +1,17 @@
 import express from "express";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
-import mongoose from "mongoose";
-import { registerValidation } from "./validations/auth.js";
-import { validationResult } from "express-validator";
 
-import UserModel from "./models/User.js";
+import mongoose from "mongoose";
+import {
+  registerValidation,
+  loginValidation,
+  postCreateValidation,
+} from "./validations/auth.js";
+
+import checkAuth from "./utils/checkAuth.js";
+
+// import { register, login, getMe } from "./controllers/UserController.js";
+import * as UserController from "./controllers/UserController.js";
+import * as PostController from "./controllers/PostController.js";
 
 mongoose
   .connect(
@@ -22,89 +28,20 @@ const app = express();
 app.use(express.json());
 
 //авторизация(поиск пользователя)
-app.post("/auth/login", async (req, res) => {
-  try {
-    const user = await UserModel.findOne({ email: req.body.email }); // поиск юзера
-    if (!user) {
-      return res.status(404).json({ message: "Пользователь не найден" }); //ответ
-    }
-    //сравнивание получаемого пароля в теле запроса и в документе пользователя
-    const isValidPass = await bcrypt.compare(
-      req.body.password,
-      user._doc.passwordHash
-    );
-    console.log(isValidPass);
-    if (!isValidPass) {
-      return req.status(400).json({ message: "Логин или пароль не верный" }); //ответ
-    }
-    //создаём новый токен
-    const token = jwt.sign(
-      {
-        _id: user._id,
-      },
-      "secret123",
-      { expiresIn: "30d" }
-    );
-
-    //убираем хеш пароля из тела ответа
-    const { passwordHash, ...userData } = user._doc;
-    res.json({ ...userData, token });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      message: "не удалось авторизоватся",
-    });
-  }
-});
+app.post("/auth/login", loginValidation, UserController.login);
 
 //решистрация
-app.post("/auth/register", registerValidation, async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json(errors.array());
-    }
+app.post("/auth/register", registerValidation, UserController.register);
 
-    // ======= шифрование пароля =======
-    const password = req.body.password; // получаем пароль из запроса req
-    const salt = await bcrypt.genSalt(10); // генерирум алгоритьм шифрования "salt"
-    const hash = await bcrypt.hash(password, salt); // шифрование
-    // ======= /шифрование пароля =======
+//Получение информации о своём профиле
+app.get("/auth/me", checkAuth, UserController.getMe);
 
-    //создание документа пользователя
-    const doc = new UserModel({
-      email: req.body.email,
-      fullName: req.body.fullName,
-      avatarUrl: req.body.avatarUrl,
-      passwordHash: hash,
-    });
+app.get("/posts", PostController.getAll);
+app.get("/posts/:id", PostController.getOne);
 
-    const user = await doc.save(); //сохраняем пользователя в базе
-
-    //токен пользователя
-    const token = jwt.sign(
-      {
-        _id: user._id,
-      },
-      "secret123",
-      { expiresIn: "30d" }
-    );
-    //убираем хеш пароля из тела ответа
-    const { passwordHash, ...userData } = user._doc;
-
-    res.json({ ...userData, token });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      message: "не удалось зарегистрироватся",
-    });
-  }
-});
-
-app.get("/auth/me", (req, res) => {
-  try {
-  } catch (error) {}
-});
+app.post("/posts", checkAuth, postCreateValidation, PostController.create);
+// app.delete("/posts/", PostController.remove);
+// app.patch("/posts/", PostController.update);
 
 app.listen(4444, (err) => {
   if (err) {
