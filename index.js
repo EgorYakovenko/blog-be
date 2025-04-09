@@ -21,6 +21,43 @@ mongoose
 const app = express();
 app.use(express.json());
 
+//авторизация(поиск пользователя)
+app.post("/auth/login", async (req, res) => {
+  try {
+    const user = await UserModel.findOne({ email: req.body.email }); // поиск юзера
+    if (!user) {
+      return res.status(404).json({ message: "Пользователь не найден" }); //ответ
+    }
+    //сравнивание получаемого пароля в теле запроса и в документе пользователя
+    const isValidPass = await bcrypt.compare(
+      req.body.password,
+      user._doc.passwordHash
+    );
+    console.log(isValidPass);
+    if (!isValidPass) {
+      return req.status(400).json({ message: "Логин или пароль не верный" }); //ответ
+    }
+    //создаём новый токен
+    const token = jwt.sign(
+      {
+        _id: user._id,
+      },
+      "secret123",
+      { expiresIn: "30d" }
+    );
+
+    //убираем хеш пароля из тела ответа
+    const { passwordHash, ...userData } = user._doc;
+    res.json({ ...userData, token });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "не удалось авторизоватся",
+    });
+  }
+});
+
+//решистрация
 app.post("/auth/register", registerValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -52,7 +89,7 @@ app.post("/auth/register", registerValidation, async (req, res) => {
       "secret123",
       { expiresIn: "30d" }
     );
-
+    //убираем хеш пароля из тела ответа
     const { passwordHash, ...userData } = user._doc;
 
     res.json({ ...userData, token });
@@ -62,6 +99,11 @@ app.post("/auth/register", registerValidation, async (req, res) => {
       message: "не удалось зарегистрироватся",
     });
   }
+});
+
+app.get("/auth/me", (req, res) => {
+  try {
+  } catch (error) {}
 });
 
 app.listen(4444, (err) => {
